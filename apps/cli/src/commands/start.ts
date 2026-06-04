@@ -85,6 +85,8 @@ export async function start(args: StartArgs): Promise<void> {
     process.env.GOOGLE_APPLICATION_CREDENTIALS = '/app/credentials/google-sa-key.json';
   }
 
+  const codexOAuthHome = resolveCodexOAuthHome();
+
   // 10. Resolve output directory
   const outputDir = args.output ? path.resolve(args.output) : undefined;
   if (outputDir) {
@@ -105,9 +107,10 @@ export async function start(args: StartArgs): Promise<void> {
     workspacesDir,
     taskQueue,
     containerName,
-    envFlags: buildEnvFlags(),
+    envFlags: buildEnvFlags(!!codexOAuthHome),
     ...(config && { config }),
     ...(hasCredentials && { credentials: credentialsPath }),
+    ...(codexOAuthHome && { codexOAuthHome }),
     ...(promptsDir && { promptsDir }),
     ...(outputDir && { outputDir }),
     workspace,
@@ -206,6 +209,25 @@ export async function start(args: StartArgs): Promise<void> {
     process.exit(0);
   });
   process.on('exit', cleanup);
+}
+
+function resolveCodexOAuthHome(): string | undefined {
+  if (process.env.SHANNON_AI_PROVIDER !== 'codex') {
+    return undefined;
+  }
+
+  const configuredHome = process.env.SHANNON_CODEX_OAUTH_HOME;
+  if (!configuredHome) {
+    return undefined;
+  }
+
+  const resolvedHome = path.resolve(configuredHome.replace(/^~(?=$|\/|\\)/, process.env.HOME || ''));
+  if (!fs.existsSync(resolvedHome)) {
+    console.error(`ERROR: SHANNON_CODEX_OAUTH_HOME does not exist: ${resolvedHome}`);
+    process.exit(1);
+  }
+
+  return resolvedHome;
 }
 
 function printDebugHint(containerName: string): void {

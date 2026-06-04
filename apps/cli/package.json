@@ -1,7 +1,7 @@
 {
   "name": "@keygraph/shannon",
   "version": "0.0.0",
-  "description": "Shannon - Autonomous white-box AI pentester for web applications and APIs by Keygraph",
+  "description": "Shannon - Autonomous white-box AI pentester for web applications and APIs with Claude and Codex account support",
   "type": "module",
   "main": "dist/index.mjs",
   "bin": {

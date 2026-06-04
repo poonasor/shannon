@@ -91,7 +91,7 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/apps/worker /app/apps/worker
 COPY --from=builder /app/apps/cli/package.json /app/apps/cli/package.json
 
-RUN npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.84 @playwright/cli@0.1.1
+RUN npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.84 @openai/codex@0.125.0 @playwright/cli@0.1.1
 RUN mkdir -p /tmp/.claude/skills && \
     playwright-cli install --skills && \
     cp -r .claude/skills/playwright-cli /tmp/.claude/skills/ && \
@@ -105,12 +105,13 @@ RUN ln -s /app/apps/worker/dist/scripts/save-deliverable.js /usr/local/bin/save-
 
 # Create directories for session data and ensure proper permissions
 RUN mkdir -p /app/sessions /app/repos /app/workspaces && \
-    mkdir -p /tmp/.cache /tmp/.config /tmp/.npm && \
+    mkdir -p /tmp/.cache /tmp/.config /tmp/.codex /tmp/.npm && \
     chmod 777 /app && \
     chmod 777 /tmp/.cache && \
     chmod 777 /tmp/.config && \
+    chmod 777 /tmp/.codex && \
     chmod 777 /tmp/.npm && \
-    chown -R pentest:pentest /app /tmp/.claude
+    chown -R pentest:pentest /app /tmp/.claude /tmp/.codex
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

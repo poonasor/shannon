@@ -13,6 +13,8 @@
 
 export type { ClaudePromptResult } from '../ai/claude-executor.js';
 export { runClaudePrompt } from '../ai/claude-executor.js';
+export type { PromptResult } from '../ai/executor.js';
+export { runAgentPrompt } from '../ai/executor.js';
 export type { AgentExecutionInput } from './agent-execution.js';
 export { AgentExecutionService } from './agent-execution.js';
 export { ConfigLoaderService } from './config-loader.js';

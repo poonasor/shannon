@@ -13,7 +13,7 @@ import { type ShannonConfig, saveConfig } from '../config/writer.js';
 
 const SHANNON_HOME = path.join(os.homedir(), '.shannon');
 
-type Provider = 'anthropic' | 'custom_base_url' | 'bedrock' | 'vertex';
+type Provider = 'anthropic' | 'codex' | 'custom_base_url' | 'bedrock' | 'vertex';
 
 export async function setup(): Promise<void> {
   p.intro('Shannon Setup');
@@ -23,6 +23,7 @@ export async function setup(): Promise<void> {
     message: 'Select your AI provider',
     options: [
       { value: 'anthropic' as const, label: 'Claude Direct', hint: 'recommended' },
+      { value: 'codex' as const, label: 'Codex Account', hint: 'ChatGPT/Codex login' },
       { value: 'custom_base_url' as const, label: 'Custom Base URL', hint: 'proxies, gateways' },
       { value: 'bedrock' as const, label: 'Claude via AWS Bedrock' },
       { value: 'vertex' as const, label: 'Claude via Google Vertex AI' },
@@ -47,6 +48,8 @@ async function setupProvider(provider: Provider): Promise<ShannonConfig> {
   switch (provider) {
     case 'anthropic':
       return setupAnthropic();
+    case 'codex':
+      return setupCodex();
     case 'custom_base_url':
       return setupCustomBaseUrl();
     case 'bedrock':
@@ -111,6 +114,68 @@ async function setupAnthropic(): Promise<ShannonConfig> {
     if (p.isCancel(large)) return cancelAndExit();
 
     config.models = { small, medium, large };
+  }
+
+  return config;
+}
+
+async function setupCodex(): Promise<ShannonConfig> {
+  const authMethod = await p.select({
+    message: 'Codex authentication method',
+    options: [
+      { value: 'oauth_home' as const, label: 'OAuth login cache', hint: 'recommended' },
+      { value: 'access_token' as const, label: 'Workspace access token', hint: 'Business/Enterprise automation' },
+    ],
+  });
+  if (p.isCancel(authMethod)) return cancelAndExit();
+
+  const config: ShannonConfig = {};
+
+  if (authMethod === 'oauth_home') {
+    const home = await p.path({
+      message: 'Codex OAuth login directory',
+      initialValue: path.join(os.homedir(), '.codex'),
+      validate: (value) => {
+        if (!value) return 'Codex OAuth login directory is required';
+        if (!fs.existsSync(value)) return 'Directory not found';
+        return undefined;
+      },
+    });
+    if (p.isCancel(home)) return cancelAndExit();
+    config.codex = { oauth_home: home };
+  } else {
+    const token = await promptSecret('Enter your Codex workspace access token');
+    config.codex = { access_token: token };
+  }
+
+  config.codex = { ...config.codex, sandbox: 'workspace-write' };
+
+  const customizeModels = await p.confirm({
+    message: 'Do you want to set Codex model overrides for Shannon tiers?',
+    initialValue: false,
+  });
+  if (p.isCancel(customizeModels)) return cancelAndExit();
+
+  if (customizeModels) {
+    const small = await p.text({
+      message: 'Small Codex model ID',
+      validate: required('Small model ID is required'),
+    });
+    if (p.isCancel(small)) return cancelAndExit();
+
+    const medium = await p.text({
+      message: 'Medium Codex model ID',
+      validate: required('Medium model ID is required'),
+    });
+    if (p.isCancel(medium)) return cancelAndExit();
+
+    const large = await p.text({
+      message: 'Large Codex model ID',
+      validate: required('Large model ID is required'),
+    });
+    if (p.isCancel(large)) return cancelAndExit();
+
+    config.codex_models = { small, medium, large };
   }
 
   return config;
@@ -285,6 +350,8 @@ async function setupVertex(): Promise<ShannonConfig> {
 // === Helpers ===
 
 async function maybePromptAdaptiveThinking(config: ShannonConfig): Promise<void> {
+  if (config.codex) return;
+
   const m = config.models;
   const hasOpus47 = !m || [m.small, m.medium, m.large].some((v) => v && /opus-4-[67]/.test(v));
   if (!hasOpus47) return;

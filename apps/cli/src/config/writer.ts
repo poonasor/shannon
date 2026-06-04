@@ -10,6 +10,14 @@ import { getConfigFile } from '../home.js';
 export interface ShannonConfig {
   core?: { max_tokens?: number; adaptive_thinking?: boolean };
   anthropic?: { api_key?: string; oauth_token?: string };
+  codex?: {
+    access_token?: string;
+    oauth_home?: string;
+    sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
+    ignore_user_config?: boolean;
+    ignore_rules?: boolean;
+  };
+  codex_models?: { small?: string; medium?: string; large?: string; default?: string };
   custom_base_url?: { base_url?: string; auth_token?: string };
   bedrock?: { use?: boolean; region?: string; token?: string };
   vertex?: { use?: boolean; region?: string; project_id?: string; key_path?: string };

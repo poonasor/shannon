@@ -36,6 +36,20 @@ ANTHROPIC_API_KEY=your-api-key
 CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000
 ```
 
+For the Codex provider in this fork, use Codex OAuth account auth rather than a raw API key replacement:
+
+```bash
+SHANNON_AI_PROVIDER=codex
+SHANNON_CODEX_OAUTH_HOME=/path/to/codex-oauth-home
+```
+
+Where access tokens are available for Codex workspace automation, this is also account usage rather than OpenAI API usage:
+
+```bash
+SHANNON_AI_PROVIDER=codex
+CODEX_ACCESS_TOKEN=your-codex-access-token
+```
+
 Environment variables can also be exported directly:
 
 ```bash

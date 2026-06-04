@@ -237,6 +237,7 @@ export interface WorkerOptions {
   envFlags: string[];
   config?: { hostPath: string; containerPath: string };
   credentials?: string;
+  codexOAuthHome?: string;
   promptsDir?: string;
   outputDir?: string;
   workspace: string;
@@ -294,6 +295,12 @@ export function spawnWorker(opts: WorkerOptions): ChildProcess {
   // Mount credentials file to fixed container path
   if (opts.credentials) {
     args.push('-v', `${opts.credentials}:/app/credentials/google-sa-key.json:ro`);
+  }
+
+  // Optional Codex OAuth auth/config bridge. The host path is explicit
+  // so Shannon does not silently mutate a user's normal Codex login cache.
+  if (opts.codexOAuthHome) {
+    args.push('-v', `${opts.codexOAuthHome}:/tmp/.codex`);
   }
 
   // Environment

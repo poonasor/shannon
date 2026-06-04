@@ -11,6 +11,7 @@ import { getMode } from './mode.js';
 
 /** Environment variables forwarded to worker containers. */
 const FORWARD_VARS = [
+  'SHANNON_AI_PROVIDER',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_AUTH_TOKEN',
@@ -27,6 +28,15 @@ const FORWARD_VARS = [
   'ANTHROPIC_LARGE_MODEL',
   'CLAUDE_CODE_MAX_OUTPUT_TOKENS',
   'CLAUDE_ADAPTIVE_THINKING',
+  'CODEX_ACCESS_TOKEN',
+  'CODEX_MODEL',
+  'CODEX_SMALL_MODEL',
+  'CODEX_MEDIUM_MODEL',
+  'CODEX_LARGE_MODEL',
+  'CODEX_CA_CERTIFICATE',
+  'SHANNON_CODEX_SANDBOX',
+  'SHANNON_CODEX_IGNORE_USER_CONFIG',
+  'SHANNON_CODEX_IGNORE_RULES',
 ] as const;
 
 /**
@@ -46,7 +56,7 @@ export function loadEnv(): void {
 /**
  * Build `-e KEY=VALUE` flags for docker run, only for set variables.
  */
-export function buildEnvFlags(): string[] {
+export function buildEnvFlags(codexOAuthHomeMounted = false): string[] {
   const flags: string[] = ['-e', 'TEMPORAL_ADDRESS=shannon-temporal:7233'];
 
   for (const key of FORWARD_VARS) {
@@ -56,13 +66,17 @@ export function buildEnvFlags(): string[] {
     }
   }
 
+  if (codexOAuthHomeMounted) {
+    flags.push('-e', 'CODEX_HOME=/tmp/.codex');
+  }
+
   return flags;
 }
 
 interface CredentialValidation {
   valid: boolean;
   error?: string;
-  mode: 'api-key' | 'oauth' | 'custom-base-url' | 'bedrock' | 'vertex';
+  mode: 'api-key' | 'oauth' | 'custom-base-url' | 'bedrock' | 'vertex' | 'codex';
 }
 
 /** Check if a custom Anthropic-compatible base URL is configured. */
@@ -73,6 +87,7 @@ function isCustomBaseUrlConfigured(): boolean {
 /** Detect which providers are configured via environment variables. */
 function detectProviders(): string[] {
   const providers: string[] = [];
+  if (process.env.SHANNON_AI_PROVIDER === 'codex') return ['Codex account'];
   if (process.env.ANTHROPIC_API_KEY) providers.push('Anthropic API key');
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN) providers.push('Anthropic OAuth');
   if (isCustomBaseUrlConfigured()) providers.push('Custom Base URL');
@@ -85,6 +100,19 @@ function detectProviders(): string[] {
  * Validate that exactly one authentication method is configured.
  */
 export function validateCredentials(): CredentialValidation {
+  if (process.env.SHANNON_AI_PROVIDER === 'codex') {
+    if (process.env.SHANNON_CODEX_OAUTH_HOME || process.env.CODEX_ACCESS_TOKEN) {
+      return { valid: true, mode: 'codex' };
+    }
+
+    return {
+      valid: false,
+      mode: 'codex',
+      error:
+        'Codex provider selected. Run codex login, then set SHANNON_CODEX_OAUTH_HOME to that Codex OAuth directory. CODEX_ACCESS_TOKEN is also supported for Codex workspace automation; OPENAI_API_KEY is not used.',
+    };
+  }
+
   // Reject multiple providers
   const providers = detectProviders();
   if (providers.length > 1) {

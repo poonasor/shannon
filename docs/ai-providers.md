@@ -1,6 +1,60 @@
 # AI Providers
 
-Shannon Lite works best with Claude models. Anthropic API keys are recommended for most users, and Shannon Lite also supports AWS Bedrock, Google Vertex AI, and custom Anthropic-compatible endpoints.
+Shannon Lite works best with Claude models. Anthropic API keys are recommended for most users, and Shannon Lite also supports AWS Bedrock, Google Vertex AI, custom Anthropic-compatible endpoints, and an experimental Codex account provider in this fork.
+
+## Codex Account Provider
+
+This fork can run Shannon agents through the Codex CLI with ChatGPT/Codex account authentication. This is not an OpenAI API-key swap: Codex usage follows the authenticated Codex account or workspace used by `codex exec`.
+
+Supported Codex account-auth paths:
+
+- `SHANNON_CODEX_OAUTH_HOME` pointing to an explicit Codex OAuth login directory from `codex login`.
+- `CODEX_ACCESS_TOKEN` for Codex workspace automation where access tokens are available. This is not an OpenAI API key.
+
+Source-build `.env` example with a mounted Codex OAuth login:
+
+```bash
+SHANNON_AI_PROVIDER=codex
+SHANNON_CODEX_OAUTH_HOME=/path/to/codex-oauth-home
+SHANNON_CODEX_SANDBOX=workspace-write
+```
+
+You can point `SHANNON_CODEX_OAUTH_HOME` at the directory created by `codex login`, usually `~/.codex`. If you want to avoid modifying your normal Codex login cache, copy it to a dedicated directory first and point `SHANNON_CODEX_OAUTH_HOME` there.
+
+Source-build `.env` example with a Codex workspace access token:
+
+```bash
+SHANNON_AI_PROVIDER=codex
+CODEX_ACCESS_TOKEN=your-codex-access-token
+SHANNON_CODEX_SANDBOX=workspace-write
+```
+
+Optional model tier overrides:
+
+```bash
+CODEX_SMALL_MODEL=...
+CODEX_MEDIUM_MODEL=...
+CODEX_LARGE_MODEL=...
+```
+
+If these are omitted, Shannon lets the Codex CLI choose its configured default model.
+
+In `npx` mode for a forked package build, the setup wizard can write:
+
+```toml
+[codex]
+oauth_home = "/path/to/codex-oauth-home"
+sandbox = "workspace-write"
+
+# or:
+# access_token = "your-codex-access-token"
+```
+
+> [!IMPORTANT]
+> The published `npx @keygraph/shannon` package does not include this fork's Codex provider until you publish or install your forked CLI/image. Running the upstream npx package will continue to use the upstream provider behavior.
+
+> [!WARNING]
+> Shannon's prompts and validation were originally tuned for Claude. Codex runs use the same phase prompts and JSON schemas, but full pentest reliability requires retesting every agent phase.
 
 ## Anthropic
 

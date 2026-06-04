@@ -6,7 +6,7 @@
 
 // Production Claude agent execution with retry, git checkpoints, and audit logging
 
-import { type JsonSchemaOutputFormat, query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { fs, path } from 'zx';
 import type { AuditSession } from '../audit/index.js';
 import { deliverablesDir } from '../paths.js';
@@ -21,26 +21,13 @@ import { dispatchMessage } from './message-handlers.js';
 import { type ModelTier, resolveModel, supportsAdaptiveThinking } from './models.js';
 import { detectExecutionContext, formatCompletionMessage, formatErrorOutput } from './output-formatters.js';
 import { createProgressManager } from './progress-manager.js';
+import type { JsonSchemaOutputFormat, PromptResult } from './types.js';
 
 declare global {
   var SHANNON_DISABLE_LOADER: boolean | undefined;
 }
 
-export interface ClaudePromptResult {
-  result?: string | null | undefined;
-  success: boolean;
-  duration: number;
-  turns?: number | undefined;
-  cost: number;
-  model?: string | undefined;
-  partialCost?: number | undefined;
-  apiErrorDetected?: boolean | undefined;
-  error?: string | undefined;
-  errorType?: string | undefined;
-  prompt?: string | undefined;
-  retryable?: boolean | undefined;
-  structuredOutput?: unknown;
-}
+export type ClaudePromptResult = PromptResult;
 
 function outputLines(lines: string[]): void {
   for (const line of lines) {
