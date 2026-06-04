@@ -16,6 +16,8 @@ Source-build mode resolves credentials from:
 
 Environment variables always win, so you can override saved config for a single session without editing files.
 
+For this fork's Codex provider, select it explicitly with `SHANNON_AI_PROVIDER=codex` and provide `SHANNON_CODEX_OAUTH_HOME` from `codex login`. `CODEX_ACCESS_TOKEN` is also supported where Codex workspace access tokens are available. A ChatGPT/Codex subscription is not a raw `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` replacement.
+
 ## Create a Configuration File
 
 Copy and modify the example configuration:

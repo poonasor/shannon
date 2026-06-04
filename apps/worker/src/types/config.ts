@@ -94,8 +94,9 @@ export interface DistributedConfig {
 /**
  * LLM provider configuration for multi-provider support.
  *
- * Maps to SDK environment variables at execution time. When providerType
+ * Maps to provider-specific execution settings at runtime. When providerType
  * is omitted or 'anthropic_api', falls back to apiKey + ANTHROPIC_API_KEY.
+ * Set providerType to 'codex' to run agents through Codex CLI account auth.
  */
 export interface ProviderConfig {
   readonly providerType?: string;
@@ -108,6 +109,11 @@ export interface ProviderConfig {
   readonly gcpCredentialsPath?: string;
   readonly baseUrl?: string;
   readonly authToken?: string;
+  readonly codexAccessToken?: string;
+  readonly codexOAuthHome?: string;
+  readonly codexSandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  readonly codexIgnoreUserConfig?: boolean;
+  readonly codexIgnoreRules?: boolean;
   readonly modelOverrides?: Record<string, string>;
   readonly supportsStructuredOutput?: boolean;
 }

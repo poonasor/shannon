@@ -28,7 +28,7 @@ For maximum isolation, run Shannon Lite inside a disposable virtual machine.
 ## LLM and Automation Caveats
 
 - **Verification is required**: Shannon Lite uses a proof-by-exploitation methodology, but final reports can still contain weakly supported or incorrect details. Human review is essential.
-- **Model support**: Shannon Lite is officially supported only with Claude models. Alternative models may be incomplete, inaccurate, or unstable.
+- **Model support**: Shannon Lite is officially supported only with Claude models. Codex or other alternative models may be incomplete, inaccurate, or unstable.
 - **Prompt injection risk**: Do not point Shannon Lite at untrusted or adversarial codebases. AI-powered tools that read source code can be influenced by malicious repository content.
 
 ## Scope of Analysis
@@ -47,6 +47,6 @@ For broader coverage, Shannon Pro adds black-box and white-box agentic pentestin
 
 ## Cost and Performance
 
-A full test run typically takes roughly 1 to 1.5 hours. LLM API costs vary by model pricing, target complexity, selected provider, and concurrency.
+A full test run typically takes roughly 1 to 1.5 hours. LLM API costs or Codex account usage vary by model pricing, target complexity, selected provider, and concurrency.
 
 If you use subscription-based model access, consider the rate-limit guidance in [Configuration](configuration.md).

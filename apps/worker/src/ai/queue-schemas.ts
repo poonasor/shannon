@@ -11,9 +11,9 @@
  * The SDK validates the output against the JSON Schema generated from these Zod definitions.
  */
 
-import type { JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { AgentName } from '../types/agents.js';
+import type { JsonSchemaOutputFormat } from './types.js';
 
 // === Common Fields ===
 

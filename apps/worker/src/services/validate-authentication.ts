@@ -13,9 +13,9 @@
  */
 
 import { readFile, rm } from 'node:fs/promises';
-import type { JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { runClaudePrompt } from '../ai/claude-executor.js';
+import { runAgentPrompt } from '../ai/executor.js';
+import type { JsonSchemaOutputFormat, PromptResult } from '../ai/types.js';
 import type { AuditSession } from '../audit/index.js';
 import { authStateFile } from '../audit/utils.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
@@ -110,7 +110,7 @@ export async function validateAuthentication(input: ValidateAuthInput): Promise<
   await auditSession.startAgent(AGENT_NAME, prompt, attemptNumber);
   const startTime = Date.now();
 
-  const result = await runClaudePrompt(
+  const result = await runAgentPrompt(
     prompt,
     repoPath,
     '',
@@ -204,7 +204,7 @@ function countStorageEntries(parsed: unknown, key: 'cookies' | 'origins'): numbe
 }
 
 function classifyResult(
-  result: import('../ai/claude-executor.js').ClaudePromptResult,
+  result: PromptResult,
   authentication: NonNullable<DistributedConfig['authentication']>,
 ): Result<void, PentestError> {
   if (!result.success) {

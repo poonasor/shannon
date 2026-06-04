@@ -12,7 +12,7 @@
  * - Load prompt template using AGENTS[agentName].promptTemplate
  * - Create git checkpoint
  * - Start audit logging
- * - Invoke Claude SDK via runClaudePrompt
+ * - Invoke the configured agent executor
  * - Spending cap check using isSpendingCapBehavior
  * - Handle failure (rollback, audit)
  * - Validate output using AGENTS[agentName].deliverableFilename
@@ -22,7 +22,7 @@
  */
 
 import { fs, path } from 'zx';
-import { type ClaudePromptResult, runClaudePrompt, validateAgentOutput } from '../ai/claude-executor.js';
+import { type PromptResult, runAgentPrompt, validateAgentOutput } from '../ai/executor.js';
 import { getOutputFormat, getQueueFilename } from '../ai/queue-schemas.js';
 import type { AuditSession } from '../audit/index.js';
 import { authStateFile } from '../audit/utils.js';
@@ -58,7 +58,7 @@ export interface AgentExecutionInput {
 
 interface FailAgentOpts {
   attemptNumber: number;
-  result: ClaudePromptResult;
+  result: PromptResult;
   rollbackReason: string;
   errorMessage: string;
   errorCode: ErrorCode;
@@ -163,7 +163,7 @@ export class AgentExecutionService {
 
     // 5. Execute agent
     const outputFormat = getOutputFormat(agentName, distributedConfig?.exploit ?? true);
-    const result: ClaudePromptResult = await runClaudePrompt(
+    const result: PromptResult = await runAgentPrompt(
       prompt,
       repoPath,
       '', // context
@@ -301,7 +301,7 @@ export class AgentExecutionService {
   /**
    * Convert AgentEndResult to AgentMetrics for workflow state.
    */
-  static toMetrics(endResult: AgentEndResult, result: ClaudePromptResult): AgentMetrics {
+  static toMetrics(endResult: AgentEndResult, result: PromptResult): AgentMetrics {
     return {
       durationMs: endResult.duration_ms,
       inputTokens: null, // Not currently exposed by SDK wrapper

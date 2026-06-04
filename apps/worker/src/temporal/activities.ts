@@ -19,6 +19,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ApplicationFailure, Context, heartbeat } from '@temporalio/activity';
 import { writePlaywrightStealthConfig } from '../ai/playwright-config-writer.js';
+import { isCodexProvider } from '../ai/provider.js';
 import { writeUserSettingsForCodePathAvoids } from '../ai/settings-writer.js';
 import { AuditSession } from '../audit/index.js';
 import type { ResumeAttempt } from '../audit/metrics-tracker.js';
@@ -515,6 +516,11 @@ export async function syncPlaywrightStealthConfig(input: ActivityInput): Promise
  */
 export async function syncCodePathDenyRules(input: ActivityInput): Promise<void> {
   const logger = createActivityLogger();
+  if (isCodexProvider(input.providerConfig)) {
+    logger.info('Skipping Claude code_path deny settings for Codex provider; prompt-level code_path rules still apply');
+    return;
+  }
+
   const container = getOrCreateContainer(input.workflowId, buildSessionMetadata(input), buildContainerConfig(input));
 
   const configResult = await container.configLoader.loadOptional(input.configPath, undefined, input.configYAML);

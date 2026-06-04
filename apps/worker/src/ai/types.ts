@@ -4,9 +4,30 @@
 // it under the terms of the GNU Affero General Public License version 3
 // as published by the Free Software Foundation.
 
-// Type definitions for Claude executor message processing pipeline
+// Type definitions for agent executor message processing pipeline
 
 import type { SDKAssistantMessageError } from '@anthropic-ai/claude-agent-sdk';
+
+export interface JsonSchemaOutputFormat {
+  type: 'json_schema';
+  schema: Record<string, unknown>;
+}
+
+export interface PromptResult {
+  result?: string | null | undefined;
+  success: boolean;
+  duration: number;
+  turns?: number | undefined;
+  cost: number;
+  model?: string | undefined;
+  partialCost?: number | undefined;
+  apiErrorDetected?: boolean | undefined;
+  error?: string | undefined;
+  errorType?: string | undefined;
+  prompt?: string | undefined;
+  retryable?: boolean | undefined;
+  structuredOutput?: unknown;
+}
 
 export interface ExecutionContext {
   isParallelExecution: boolean;

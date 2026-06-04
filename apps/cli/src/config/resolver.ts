@@ -31,6 +31,13 @@ const CONFIG_MAP: readonly ConfigMapping[] = [
   { env: 'ANTHROPIC_API_KEY', toml: 'anthropic.api_key', type: 'string' },
   { env: 'CLAUDE_CODE_OAUTH_TOKEN', toml: 'anthropic.oauth_token', type: 'string' },
 
+  // Codex account auth
+  { env: 'CODEX_ACCESS_TOKEN', toml: 'codex.access_token', type: 'string' },
+  { env: 'SHANNON_CODEX_OAUTH_HOME', toml: 'codex.oauth_home', type: 'string' },
+  { env: 'SHANNON_CODEX_SANDBOX', toml: 'codex.sandbox', type: 'string' },
+  { env: 'SHANNON_CODEX_IGNORE_USER_CONFIG', toml: 'codex.ignore_user_config', type: 'boolean', boolFormat: 'literal' },
+  { env: 'SHANNON_CODEX_IGNORE_RULES', toml: 'codex.ignore_rules', type: 'boolean', boolFormat: 'literal' },
+
   // Bedrock
   { env: 'CLAUDE_CODE_USE_BEDROCK', toml: 'bedrock.use', type: 'boolean' },
   { env: 'AWS_REGION', toml: 'bedrock.region', type: 'string' },
@@ -50,6 +57,10 @@ const CONFIG_MAP: readonly ConfigMapping[] = [
   { env: 'ANTHROPIC_SMALL_MODEL', toml: 'models.small', type: 'string' },
   { env: 'ANTHROPIC_MEDIUM_MODEL', toml: 'models.medium', type: 'string' },
   { env: 'ANTHROPIC_LARGE_MODEL', toml: 'models.large', type: 'string' },
+  { env: 'CODEX_MODEL', toml: 'codex_models.default', type: 'string' },
+  { env: 'CODEX_SMALL_MODEL', toml: 'codex_models.small', type: 'string' },
+  { env: 'CODEX_MEDIUM_MODEL', toml: 'codex_models.medium', type: 'string' },
+  { env: 'CODEX_LARGE_MODEL', toml: 'codex_models.large', type: 'string' },
 ] as const;
 
 // === TOML Parsing ===
@@ -133,6 +144,18 @@ function validateProviderFields(config: TOMLConfig, provider: string, errors: st
     case 'anthropic':
       if (!keys.includes('api_key') && !keys.includes('oauth_token')) {
         errors.push('[anthropic] requires either api_key or oauth_token');
+      }
+      break;
+
+    case 'codex':
+      if (!keys.includes('access_token') && !keys.includes('oauth_home')) {
+        errors.push('[codex] requires either oauth_home or access_token');
+      }
+      if (section.sandbox !== undefined) {
+        const sandbox = section.sandbox;
+        if (sandbox !== 'read-only' && sandbox !== 'workspace-write' && sandbox !== 'danger-full-access') {
+          errors.push('[codex].sandbox must be read-only, workspace-write, or danger-full-access');
+        }
       }
       break;
 
@@ -227,7 +250,7 @@ function validateConfig(config: TOMLConfig): string[] {
   }
 
   // 4. Only one provider section allowed (ignore empty sections)
-  const PROVIDER_SECTIONS = ['anthropic', 'custom_base_url', 'bedrock', 'vertex'] as const;
+  const PROVIDER_SECTIONS = ['anthropic', 'codex', 'custom_base_url', 'bedrock', 'vertex'] as const;
   const present = PROVIDER_SECTIONS.filter((s) => {
     const section = config[s];
     return section && typeof section === 'object' && Object.keys(section).length > 0;
@@ -272,6 +295,10 @@ export function resolveConfig(): void {
     }
     console.error(`\nRun 'shn setup' to reconfigure.\n`);
     process.exit(1);
+  }
+
+  if (toml.codex && Object.keys(toml.codex).length > 0 && !process.env.SHANNON_AI_PROVIDER) {
+    process.env.SHANNON_AI_PROVIDER = 'codex';
   }
 
   for (const mapping of CONFIG_MAP) {

@@ -12,8 +12,11 @@
  * - "medium" (Sonnet — tool use, general analysis)
  * - "large"  (Opus — deep reasoning, complex analysis)
  *
- * Users override via ANTHROPIC_SMALL_MODEL / ANTHROPIC_MEDIUM_MODEL / ANTHROPIC_LARGE_MODEL,
- * which works across all providers (direct, Bedrock, Vertex).
+ * Users override Claude tiers via ANTHROPIC_SMALL_MODEL / ANTHROPIC_MEDIUM_MODEL / ANTHROPIC_LARGE_MODEL,
+ * which works across Claude providers (direct, Bedrock, Vertex).
+ *
+ * Codex tiers are optional. When CODEX_*_MODEL is unset, Shannon lets the Codex CLI
+ * choose its configured default model so account/workspace policy can govern it.
  */
 
 export type ModelTier = 'small' | 'medium' | 'large';
@@ -33,6 +36,18 @@ export function resolveModel(tier: ModelTier = 'medium'): string {
       return process.env.ANTHROPIC_LARGE_MODEL || DEFAULT_MODELS.large;
     default:
       return process.env.ANTHROPIC_MEDIUM_MODEL || DEFAULT_MODELS.medium;
+  }
+}
+
+/** Resolve a Codex model tier, or undefined to let Codex choose its configured default. */
+export function resolveCodexModel(tier: ModelTier = 'medium'): string | undefined {
+  switch (tier) {
+    case 'small':
+      return process.env.CODEX_SMALL_MODEL || process.env.CODEX_MODEL || undefined;
+    case 'large':
+      return process.env.CODEX_LARGE_MODEL || process.env.CODEX_MODEL || undefined;
+    default:
+      return process.env.CODEX_MEDIUM_MODEL || process.env.CODEX_MODEL || undefined;
   }
 }
 

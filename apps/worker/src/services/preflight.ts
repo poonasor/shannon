@@ -15,10 +15,11 @@
  * 1. Repository path exists and contains .git
  * 2. Config file parses and validates (if provided)
  * 3. code_path rules match real entries in the repo (filesystem only)
- * 4. Credentials validate via Claude Agent SDK query (API key, OAuth, Bedrock, or Vertex AI)
+ * 4. Credentials validate via the configured provider (Claude SDK or Codex CLI)
  * 5. Target URL resolves, is not link-local (cloud metadata), and is reachable (DNS + HTTP)
  */
 
+import { spawn } from 'node:child_process';
 import type { LookupAddress } from 'node:dns';
 import { lookup } from 'node:dns/promises';
 import fs from 'node:fs/promises';
@@ -28,10 +29,12 @@ import net, { type LookupFunction } from 'node:net';
 import type { SDKAssistantMessageError } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { glob } from 'zx';
+import { buildCodexEnv } from '../ai/codex-executor.js';
 import { resolveModel } from '../ai/models.js';
+import { isCodexProvider } from '../ai/provider.js';
 import { parseConfig } from '../config-parser.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
-import type { Config, Rule } from '../types/config.js';
+import type { Config, ProviderConfig, Rule } from '../types/config.js';
 import { ErrorCode } from '../types/errors.js';
 import { err, ok, type Result } from '../types/result.js';
 import { isRetryableError, PentestError } from './error-handling.js';
@@ -293,12 +296,17 @@ function classifySdkError(sdkError: SDKAssistantMessageError, authType: string):
   }
 }
 
-/** Validate credentials via a minimal Claude Agent SDK query. */
+/** Validate credentials via the selected provider's cheapest smoke test. */
 async function validateCredentials(
   logger: ActivityLogger,
+  repoPath: string,
   apiKey?: string,
-  providerConfig?: import('../types/config.js').ProviderConfig,
+  providerConfig?: ProviderConfig,
 ): Promise<Result<void, PentestError>> {
+  if (isCodexProvider(providerConfig)) {
+    return validateCodexCredentials(logger, repoPath, providerConfig);
+  }
+
   // 0. If providerConfig is present, credentials are managed by the caller.
   //    The executor will map providerConfig directly to sdkEnv — no process.env needed.
   if (providerConfig) {
@@ -467,6 +475,101 @@ async function validateCredentials(
   }
 }
 
+async function runCodexSmokeTest(
+  repoPath: string,
+  providerConfig?: ProviderConfig,
+): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'codex',
+      ['exec', '--json', '--ephemeral', '--cd', repoPath, '--sandbox', 'read-only', '--skip-git-repo-check', '-'],
+      {
+        env: buildCodexEnv(repoPath, undefined, providerConfig),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, 45_000);
+
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk.toString('utf8')));
+    child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk.toString('utf8')));
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+      resolve({
+        exitCode: code ?? 1,
+        stdout: stdoutChunks.join(''),
+        stderr: stderrChunks.join(''),
+        timedOut,
+      });
+    });
+
+    child.stdin.write('Reply with exactly: OK');
+    child.stdin.end();
+  });
+}
+
+async function validateCodexCredentials(
+  logger: ActivityLogger,
+  repoPath: string,
+  providerConfig?: ProviderConfig,
+): Promise<Result<void, PentestError>> {
+  logger.info('Validating Codex CLI account authentication...');
+
+  try {
+    const result = await runCodexSmokeTest(repoPath, providerConfig);
+
+    if (result.timedOut) {
+      return err(
+        new PentestError(
+          'Codex credential validation timed out. Run codex login and mount the OAuth home as CODEX_HOME, or provide CODEX_ACCESS_TOKEN for Codex workspace automation.',
+          'config',
+          false,
+          {},
+          ErrorCode.AUTH_FAILED,
+        ),
+      );
+    }
+
+    if (result.exitCode !== 0) {
+      const detail = (result.stderr || result.stdout || `codex exec exited with code ${result.exitCode}`).trim();
+      return err(
+        new PentestError(
+          `Codex CLI validation failed: ${detail.slice(0, 500)}`,
+          'config',
+          false,
+          { exitCode: result.exitCode },
+          ErrorCode.AUTH_FAILED,
+        ),
+      );
+    }
+
+    logger.info('Codex CLI auth OK');
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return err(
+      new PentestError(
+        `Codex CLI validation failed: ${message}. Install @openai/codex in the worker image and provide Codex account auth.`,
+        'config',
+        false,
+        {},
+        ErrorCode.AUTH_FAILED,
+      ),
+    );
+  }
+}
+
 // === Target URL Validation ===
 
 /** HTTP HEAD with TLS verification disabled — we check reachability, not certificate validity. */
@@ -607,7 +710,7 @@ export async function runPreflightChecks(
   logger: ActivityLogger,
   skipGitCheck?: boolean,
   apiKey?: string,
-  providerConfig?: import('../types/config.js').ProviderConfig,
+  providerConfig?: ProviderConfig,
 ): Promise<Result<void, PentestError>> {
   // 1. Repository check (free — filesystem only)
   const repoResult = await validateRepo(repoPath, logger, skipGitCheck);
@@ -634,8 +737,8 @@ export async function runPreflightChecks(
     }
   }
 
-  // 4. Credential check (cheap — 1 SDK round-trip, skipped when providerConfig present)
-  const credResult = await validateCredentials(logger, apiKey, providerConfig);
+  // 4. Credential check (cheap provider smoke test; skipped for managed non-Codex providerConfig)
+  const credResult = await validateCredentials(logger, repoPath, apiKey, providerConfig);
   if (!credResult.ok) {
     return credResult;
   }

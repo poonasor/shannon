@@ -9,8 +9,8 @@
 
 <a href="https://trendshift.io/repositories/15604" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15604" alt="KeygraphHQ%2Fshannon | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-Shannon is an autonomous, white-box AI pentester for web applications and APIs. <br />
-It analyzes your source code, identifies attack paths, and executes real exploits to prove vulnerabilities before they reach production.
+Shannon is an autonomous, white-box AI pentester for web applications and APIs, now with experimental Codex account support in this fork. <br />
+It analyzes your source code, identifies attack paths, and executes real exploits through Claude or Codex-backed agents to prove vulnerabilities before they reach production.
 
 ---
 
@@ -39,7 +39,7 @@ It analyzes your source code, identifies attack paths, and executes real exploit
 
 ## What is Shannon?
 
-Shannon is an AI pentester developed by [Keygraph](https://keygraph.io). It performs white-box security testing of web applications and their underlying APIs by combining source-code analysis with live exploitation.
+Shannon is an AI pentester developed by [Keygraph](https://keygraph.io). It performs white-box security testing of web applications and their underlying APIs by combining source-code analysis with live exploitation. This fork adds an experimental Codex account provider that runs agents through Codex CLI OAuth/account usage rather than raw OpenAI API keys.
 
 Shannon analyzes your web application's source code to identify potential attack vectors, then uses browser automation and command-line tools to execute real exploits against the running application and its APIs. Only vulnerabilities with a working proof-of-concept are included in the final report.
 
@@ -78,7 +78,7 @@ Sample Shannon Lite penetration test reports from intentionally vulnerable appli
 
 - **Docker** - required for the worker container.
 - **Node.js 18+** - required for the recommended `npx` workflow.
-- **AI provider credentials** - Anthropic is recommended; AWS Bedrock, Google Vertex AI, and compatible proxy setups are documented separately.
+- **AI provider credentials** - Anthropic is recommended; AWS Bedrock, Google Vertex AI, compatible proxy setups, and this fork's experimental Codex account provider are documented separately.
 
 ### Run Shannon Lite
 
@@ -194,7 +194,7 @@ Use these guides for operational detail:
 | --- | --- |
 | [Source build and CLI commands](docs/development.md) | Cloning, building, common commands, output paths, and local development. |
 | [Configuration](docs/configuration.md) | Authenticated testing, login flows, rules of engagement, report filters, and rate-limit settings. |
-| [AI providers](docs/ai-providers.md) | Anthropic, AWS Bedrock, Google Vertex AI, and custom Anthropic-compatible endpoints. |
+| [AI providers](docs/ai-providers.md) | Anthropic, AWS Bedrock, Google Vertex AI, custom Anthropic-compatible endpoints, and this fork's Codex account provider. |
 | [Platforms and networking](docs/platforms.md) | Windows/WSL2, Linux, macOS, Docker networking, local apps, and custom hostnames. |
 | [Workspaces and resuming](docs/workspaces.md) | Naming workspaces, resuming interrupted scans, and workspace storage. |
 | [Safety and limitations](docs/safety.md) | Authorized-use requirements, non-production guidance, mutative effects, cost, and model caveats. |
@@ -211,7 +211,7 @@ Important limitations:
 
 - Shannon Lite focuses on actively exploitable issues such as Injection, XSS, SSRF, Broken Authentication, and Broken Authorization. Broader static-analysis findings, including vulnerable dependencies and insecure configurations, are a core focus of Shannon Pro.
 - Findings still require human review. LLM-generated reports can contain weakly supported or incorrect details.
-- Shannon Lite is officially supported with Claude models. Smaller, alternative, or proxied non-Claude models may be incomplete or unstable.
+- Shannon Lite is officially supported with Claude models. Smaller, alternative, Codex, or proxied non-Claude models may be incomplete or unstable.
 - A full run can take roughly 1 to 1.5 hours and may incur LLM API costs depending on model pricing and application complexity.
 - Do not scan untrusted or adversarial codebases; AI-powered tools that read source code can be exposed to prompt injection.
 
