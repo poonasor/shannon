@@ -30,7 +30,7 @@ import type { SDKAssistantMessageError } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { glob } from 'zx';
 import { buildCodexEnv } from '../ai/codex-executor.js';
-import { resolveModel } from '../ai/models.js';
+import { resolveCodexModel, resolveModel } from '../ai/models.js';
 import { isCodexProvider } from '../ai/provider.js';
 import { parseConfig } from '../config-parser.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
@@ -480,14 +480,26 @@ async function runCodexSmokeTest(
   providerConfig?: ProviderConfig,
 ): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'codex',
-      ['exec', '--json', '--ephemeral', '--cd', repoPath, '--sandbox', 'read-only', '--skip-git-repo-check', '-'],
-      {
-        env: buildCodexEnv(repoPath, undefined, providerConfig),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    );
+    const args = ['exec', '--json', '--ephemeral', '--cd', repoPath, '--sandbox', 'read-only', '--skip-git-repo-check'];
+
+    if (providerConfig?.codexIgnoreUserConfig || process.env.SHANNON_CODEX_IGNORE_USER_CONFIG === 'true') {
+      args.push('--ignore-user-config');
+    }
+    if (providerConfig?.codexIgnoreRules || process.env.SHANNON_CODEX_IGNORE_RULES === 'true') {
+      args.push('--ignore-rules');
+    }
+
+    const model = resolveCodexModel('small') ?? resolveCodexModel('medium') ?? resolveCodexModel('large');
+    if (model) {
+      args.push('-m', model);
+    }
+
+    args.push('-');
+
+    const child = spawn('codex', args, {
+      env: buildCodexEnv(repoPath, undefined, providerConfig),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
 
     const stdoutChunks: string[] = [];
     const stderrChunks: string[] = [];

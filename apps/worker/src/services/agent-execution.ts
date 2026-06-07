@@ -67,6 +67,37 @@ interface FailAgentOpts {
   context: Record<string, unknown>;
 }
 
+interface StructuredVulnOutput {
+  vulnerabilities?: unknown[];
+}
+
+function renderStructuredVulnDeliverable(agentName: AgentName, structuredOutput: unknown): string {
+  const output = structuredOutput as StructuredVulnOutput;
+  const vulnerabilities = Array.isArray(output?.vulnerabilities) ? output.vulnerabilities : [];
+  const title = AGENTS[agentName].displayName;
+
+  const lines = [`# ${title} Findings`, '', `Structured queue entries: ${vulnerabilities.length}`, ''];
+
+  if (vulnerabilities.length === 0) {
+    lines.push('No candidate vulnerabilities were identified by this agent in pipeline-testing mode.', '');
+    return lines.join('\n');
+  }
+
+  for (const [index, finding] of vulnerabilities.entries()) {
+    lines.push(`## Finding ${index + 1}`, '');
+    if (finding && typeof finding === 'object') {
+      for (const [key, value] of Object.entries(finding as Record<string, unknown>)) {
+        lines.push(`- **${key}**: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+      }
+    } else {
+      lines.push(String(finding));
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
 /**
  * Service for executing agents with full lifecycle management.
  *
@@ -216,6 +247,20 @@ export class AgentExecutionService {
       const queuePath = path.join(deliverablesPath, queueFilename);
       await fs.writeFile(queuePath, JSON.stringify(result.structuredOutput, null, 2), 'utf8');
       logger.info(`Wrote structured output queue to ${queueFilename}`);
+
+      // Codex structured output mode writes the queue directly instead of asking the
+      // model to call save-deliverable. The existing queue validator intentionally
+      // requires a paired markdown deliverable, so synthesize a small defensible
+      // summary when the agent did not create one itself.
+      const deliverablePath = path.join(deliverablesPath, AGENTS[agentName].deliverableFilename);
+      if (!(await fs.pathExists(deliverablePath))) {
+        await fs.writeFile(
+          deliverablePath,
+          renderStructuredVulnDeliverable(agentName, result.structuredOutput),
+          'utf8',
+        );
+        logger.info(`Wrote structured output deliverable to ${AGENTS[agentName].deliverableFilename}`);
+      }
     }
 
     // 9. Validate output

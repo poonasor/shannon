@@ -390,6 +390,10 @@ export async function pentestPipeline(input: PipelineInput): Promise<PipelineSta
       log.warn(`${failedPipelines.length} pipeline(s) failed`, {
         failures: failedPipelines,
       });
+      throw ApplicationFailure.nonRetryable(
+        `Vulnerability/exploitation pipeline failed: ${failedPipelines.join('; ')}`,
+        'PipelineAgentFailure',
+      );
     }
   }
 

@@ -269,14 +269,23 @@ export function spawnWorker(opts: WorkerOptions): ChildProcess {
 
   // Volume mounts
   args.push('-v', `${opts.workspacesDir}:/app/workspaces`);
+
+  // Docker cannot create a bind-mount target inside a later read-only repo mount.
+  // Ensure Codex's per-worktree metadata mountpoint exists on the host before
+  // mounting the repo :ro, then shadow it with a workspace-backed writable dir.
+  fs.mkdirSync(path.join(opts.repo.hostPath, '.codex'), { recursive: true });
+
   args.push('-v', `${opts.repo.hostPath}:${opts.repo.containerPath}:ro`);
 
-  // Writable overlays: shadow .shannon/ and .playwright/ inside the :ro repo with workspace-backed dirs
+  // Writable overlays: shadow tool/runtime-owned paths inside the :ro repo with workspace-backed dirs.
+  // Codex initializes a per-worktree `.codex` metadata directory before executing any tool command;
+  // without this overlay, Codex+bwrap fails before it can even read a read-only mounted repository.
   const workspacePath = path.join(opts.workspacesDir, opts.workspace);
   args.push('-v', `${path.join(workspacePath, 'deliverables')}:${opts.repo.containerPath}/.shannon/deliverables`);
   args.push('-v', `${path.join(workspacePath, 'scratchpad')}:${opts.repo.containerPath}/.shannon/scratchpad`);
   args.push('-v', `${path.join(workspacePath, '.playwright-cli')}:${opts.repo.containerPath}/.shannon/.playwright-cli`);
   args.push('-v', `${path.join(workspacePath, '.playwright')}:${opts.repo.containerPath}/.playwright`);
+  args.push('-v', `${path.join(workspacePath, '.codex')}:${opts.repo.containerPath}/.codex`);
 
   // Local mode: mount prompts for live editing
   if (opts.promptsDir) {
@@ -299,8 +308,19 @@ export function spawnWorker(opts: WorkerOptions): ChildProcess {
 
   // Optional Codex OAuth auth/config bridge. The host path is explicit
   // so Shannon does not silently mutate a user's normal Codex login cache.
+  // Keep CODEX_HOME outside /tmp because Codex refuses helper binaries under temporary dirs.
+  // Mount a per-workspace copy of auth/config only; mounting the full Codex home can carry
+  // stale rollout/session sqlite paths from the host (or older container CODEX_HOME values).
   if (opts.codexOAuthHome) {
-    args.push('-v', `${opts.codexOAuthHome}:/tmp/.codex`);
+    const codexHome = path.join(workspacePath, 'codex-home');
+    fs.mkdirSync(codexHome, { recursive: true });
+    for (const filename of ['auth.json', 'config.toml']) {
+      const source = path.join(opts.codexOAuthHome, filename);
+      if (fs.existsSync(source)) {
+        fs.copyFileSync(source, path.join(codexHome, filename));
+      }
+    }
+    args.push('-v', `${codexHome}:/app/.codex`);
   }
 
   // Environment

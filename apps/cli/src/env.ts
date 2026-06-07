@@ -67,7 +67,9 @@ export function buildEnvFlags(codexOAuthHomeMounted = false): string[] {
   }
 
   if (codexOAuthHomeMounted) {
-    flags.push('-e', 'CODEX_HOME=/tmp/.codex');
+    // Codex refuses to install helper binaries under a temporary home such as /tmp.
+    // Use a stable app path while still bind-mounting the user's explicit Codex OAuth home.
+    flags.push('-e', 'CODEX_HOME=/app/.codex');
   }
 
   return flags;

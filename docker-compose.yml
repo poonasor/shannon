@@ -9,7 +9,7 @@ services:
     command: ["server", "start-dev", "--db-filename", "/home/temporal/temporal.db", "--ip", "0.0.0.0"]
     ports:
       - "127.0.0.1:7233:7233"   # gRPC
-      - "127.0.0.1:8233:8233"   # Web UI (built-in)
+      - "0.0.0.0:8233:8233"     # Web UI (built-in) exposed on LAN
     volumes:
       - temporal-data:/home/temporal
     healthcheck:

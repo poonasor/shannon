@@ -100,10 +100,39 @@ export type AuthzFinding = z.infer<typeof AuthzVulnerability>;
 
 // === Convert to JSON Schema for SDK ===
 
+function requireAllObjectProperties(schema: unknown): unknown {
+  if (!schema || typeof schema !== 'object') {
+    return schema;
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map((item) => requireAllObjectProperties(item));
+  }
+
+  const record = schema as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    record[key] = requireAllObjectProperties(value);
+  }
+
+  if (
+    record.type === 'object' &&
+    record.properties &&
+    typeof record.properties === 'object' &&
+    !Array.isArray(record.properties)
+  ) {
+    record.required = Object.keys(record.properties as Record<string, unknown>);
+  }
+
+  return record;
+}
+
 // NOTE: The SDK's AJV validator expects draft-07. Zod defaults to draft-2020-12 which
-// causes the SDK to silently skip structured output.
+// causes the SDK to silently skip structured output. Codex/OpenAI structured outputs also
+// require every object property to appear in `required`, even fields we semantically treat
+// as optional in TypeScript; agents can leave those values empty when not applicable.
 function toOutputFormat(zodSchema: z.ZodType): JsonSchemaOutputFormat {
-  return { type: 'json_schema', schema: z.toJSONSchema(zodSchema, { target: 'draft-07' }) as Record<string, unknown> };
+  const schema = z.toJSONSchema(zodSchema, { target: 'draft-07' }) as Record<string, unknown>;
+  return { type: 'json_schema', schema: requireAllObjectProperties(schema) as Record<string, unknown> };
 }
 
 // === Per-Mode Output Format Builders ===
