@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const promptPath = join(process.cwd(), 'apps/worker/prompts/exploit-injection.txt');
+const promptPath = join(import.meta.dirname, '..', 'prompts', 'exploit-injection.txt');
 
 const providerRiskyPhrases = [
   'weaponize',
@@ -28,6 +28,12 @@ const providerRiskyPhrases = [
   'intelligence-informed exploitation',
   'injection exploitation',
   'injection exploitation complete',
+  'exploitation target requirement',
+  'all exploitation must be',
+  'critical exploit definition',
+  'proof-based exploitation requirements',
+  'task-based attack plan',
+  'exploit endpoint',
 ];
 
 test('injection exploitation prompt uses provider-safe defensive validation language', async () => {
