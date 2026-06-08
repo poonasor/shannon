@@ -25,6 +25,9 @@ const providerRiskyPhrases = [
   'exploitation workflow',
   'exploitation process',
   'exploitation task list',
+  'intelligence-informed exploitation',
+  'injection exploitation',
+  'injection exploitation complete',
 ];
 
 test('injection exploitation prompt uses provider-safe defensive validation language', async () => {
