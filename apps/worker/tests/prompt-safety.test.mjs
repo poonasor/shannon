@@ -17,6 +17,7 @@ const providerRiskyPhrases = [
   'proof-of-impact',
   'proof of impact',
   'successfully exploited',
+  'exploitation step',
   'exploitation steps',
   'attempted exploitation',
   'how this would be exploited',
