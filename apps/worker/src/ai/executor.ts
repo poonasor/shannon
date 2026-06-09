@@ -30,6 +30,7 @@ export async function runAgentPrompt(
   apiKey?: string,
   deliverablesSubdir?: string,
   providerConfig?: ProviderConfig,
+  mcpServers?: Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>,
 ): Promise<PromptResult> {
   if (isCodexProvider(providerConfig)) {
     return runCodexPrompt(
@@ -61,5 +62,6 @@ export async function runAgentPrompt(
     apiKey,
     deliverablesSubdir,
     providerConfig,
+    mcpServers,
   ) as Promise<ClaudePromptResult>;
 }
