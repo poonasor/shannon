@@ -101,6 +101,49 @@ function truncateStackTrace(failure: ApplicationFailure): void {
 }
 
 /**
+ * Codex currently cannot receive the in-process Claude SDK MCP collector
+ * servers. When a prompt detects that and writes a direct fallback deliverable,
+ * every collector tool remains "skipped". In that case, rendering the empty
+ * collector bag would overwrite useful agent-written markdown with placeholder
+ * sections. Preserve the direct deliverable only when it is substantive and no
+ * collector tool was used.
+ */
+export function shouldPreserveDirectDeliverableOnCollectorMiss(
+  callStatus: object,
+  existingMarkdown: string | null | undefined,
+): boolean {
+  if (!existingMarkdown || existingMarkdown.trim().length < 200) {
+    return false;
+  }
+
+  const statuses = Object.values(callStatus);
+  if (statuses.length === 0 || statuses.some((status) => status !== 'skipped')) {
+    return false;
+  }
+
+  const placeholderLinePattern = /^_\[[^\]]*(?:not provided|was not called)[^\]]*\]_$/i;
+  const substantiveLines = existingMarkdown
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith('#'))
+    .filter((line) => !placeholderLinePattern.test(line));
+
+  return substantiveLines.join('\n').trim().length >= 200;
+}
+
+async function readExistingMarkdown(filePath: string): Promise<string | null> {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Build SessionMetadata from ActivityInput.
  */
 function buildSessionMetadata(input: ActivityInput): SessionMetadata {
@@ -272,9 +315,15 @@ export async function runPreReconAgent(input: ActivityInput): Promise<AgentMetri
   const callStatus = collector.getCallStatus();
   logger.info('Pre-recon tool call status', { callStatus });
 
+  const mdPath = path.join(dir, 'pre_recon_deliverable.md');
+  const existingMarkdown = await readExistingMarkdown(mdPath);
+  if (shouldPreserveDirectDeliverableOnCollectorMiss(callStatus, existingMarkdown)) {
+    logger.warn('Preserving direct pre_recon_deliverable.md because no collector tools were called');
+    return metrics;
+  }
+
   const collected = collector.getAll();
   const markdown = renderPreRecon(collected);
-  const mdPath = path.join(dir, 'pre_recon_deliverable.md');
   await atomicWrite(mdPath, markdown);
   logger.info(`Wrote pre_recon_deliverable.md from structured data (${markdown.length} bytes)`);
 
@@ -301,9 +350,15 @@ export async function runReconAgent(input: ActivityInput): Promise<AgentMetrics>
   const callStatus = collector.getCallStatus();
   logger.info('Recon tool call status', { callStatus });
 
+  const mdPath = path.join(dir, 'recon_deliverable.md');
+  const existingMarkdown = await readExistingMarkdown(mdPath);
+  if (shouldPreserveDirectDeliverableOnCollectorMiss(callStatus, existingMarkdown)) {
+    logger.warn('Preserving direct recon_deliverable.md because no collector tools were called');
+    return metrics;
+  }
+
   const collected = collector.getAll();
   const markdown = renderRecon(collected);
-  const mdPath = path.join(dir, 'recon_deliverable.md');
   await atomicWrite(mdPath, markdown);
   logger.info(`Wrote recon_deliverable.md from structured data (${markdown.length} bytes)`);
 
