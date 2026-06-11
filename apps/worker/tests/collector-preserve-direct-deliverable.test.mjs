@@ -21,7 +21,7 @@ test('preserves a substantive direct deliverable when collector tools were unava
 });
 
 test('does not preserve direct deliverable when any collector tool was called', () => {
-  const markdown = '# Pre-Recon Report\n\nSubstantive fallback content.';
+  const markdown = `# Pre-Recon Report\n\n## Architecture\nThe app uses Next.js and Firebase. Session cookies, API routes, Firebase rules, and storage upload paths were reviewed with concrete file references.\n\n## Attack Surface\nPublic API routes and authenticated dashboard routes were mapped with file paths. This content is intentionally long enough to pass the substantive-content length guard, so the called collector status is what prevents preservation.`;
 
   assert.equal(shouldPreserveDirectDeliverableOnCollectorMiss(withCalledTool, markdown), false);
 });
