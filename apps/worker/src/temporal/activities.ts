@@ -121,7 +121,15 @@ export function shouldPreserveDirectDeliverableOnCollectorMiss(
     return false;
   }
 
-  return !existingMarkdown.includes('not provided') && !existingMarkdown.includes('was not called');
+  const placeholderLinePattern = /^_\[[^\]]*(?:not provided|was not called)[^\]]*\]_$/i;
+  const substantiveLines = existingMarkdown
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith('#'))
+    .filter((line) => !placeholderLinePattern.test(line));
+
+  return substantiveLines.join('\n').trim().length >= 200;
 }
 
 async function readExistingMarkdown(filePath: string): Promise<string | null> {

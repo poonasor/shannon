@@ -26,6 +26,12 @@ test('does not preserve direct deliverable when any collector tool was called', 
   assert.equal(shouldPreserveDirectDeliverableOnCollectorMiss(withCalledTool, markdown), false);
 });
 
+test('preserves substantive direct deliverable that naturally mentions missing controls', () => {
+  const markdown = `# Pre-Recon Report\n\n## Findings\nThe upload endpoint rate limiting was not provided by the observed middleware chain, but session-cookie validation and Firebase rule coverage were both mapped with source file references.\n\n## Evidence\nThe report includes concrete route paths, authorization guards, and storage access-control notes from the application source, so it is substantive direct fallback content rather than a collector placeholder.`;
+
+  assert.equal(shouldPreserveDirectDeliverableOnCollectorMiss(allSkipped, markdown), true);
+});
+
 test('does not preserve placeholder or empty direct deliverables', () => {
   assert.equal(shouldPreserveDirectDeliverableOnCollectorMiss(allSkipped, ''), false);
   assert.equal(
