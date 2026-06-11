@@ -48,9 +48,20 @@ const providerRiskyPhrases = [
   'proof-based exploitation requirements',
   'task-based attack plan',
   'exploit endpoint',
+  'full exploitation',
 ];
 
 for (const promptFile of exploitPrompts) {
+  test(`${promptFile} keeps proof-based validation requirements inside the critical section`, async () => {
+    const prompt = await readFile(join(promptsDir, promptFile), 'utf8');
+
+    assert.match(
+      prompt,
+      /<critical>[\s\S]*### PROOF-BASED VALIDATION REQUIREMENTS[\s\S]*<\/critical>/,
+      `${promptFile} should put proof-based validation requirements inside <critical>`,
+    );
+  });
+
   test(`${promptFile} uses provider-safe defensive validation language`, async () => {
     const prompt = await readFile(join(promptsDir, promptFile), 'utf8');
     const lowerPrompt = prompt.toLowerCase();
