@@ -108,6 +108,16 @@ function truncateStackTrace(failure: ApplicationFailure): void {
  * sections. Preserve the direct deliverable only when it is substantive and no
  * collector tool was used.
  */
+function isCollectorStatusSkipped(status: unknown): boolean {
+  if (status === 'skipped') return true;
+  if (!status || typeof status !== 'object') return false;
+
+  const callCount = 'calls' in status ? Number((status as { calls?: unknown }).calls) : NaN;
+  if (!Number.isFinite(callCount)) return false;
+
+  return callCount === 0;
+}
+
 export function shouldPreserveDirectDeliverableOnCollectorMiss(
   callStatus: object,
   existingMarkdown: string | null | undefined,
@@ -117,7 +127,7 @@ export function shouldPreserveDirectDeliverableOnCollectorMiss(
   }
 
   const statuses = Object.values(callStatus);
-  if (statuses.length === 0 || statuses.some((status) => status !== 'skipped')) {
+  if (statuses.length === 0 || statuses.some((status) => !isCollectorStatusSkipped(status))) {
     return false;
   }
 
