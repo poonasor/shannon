@@ -3,7 +3,20 @@ import { join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const promptPath = join(import.meta.dirname, '..', 'prompts', 'exploit-injection.txt');
+const promptsDir = join(import.meta.dirname, '..', 'prompts');
+
+// Every exploitation phase runs the same provider-facing validation flow, so all five
+// exploit prompts must use defensive "validation" framing rather than the offensive
+// language that triggered the original provider refusal. The injection prompt was
+// reworded first; the other four were brought in line afterward. This deny-list guards
+// all of them.
+const exploitPrompts = [
+  'exploit-injection.txt',
+  'exploit-xss.txt',
+  'exploit-auth.txt',
+  'exploit-authz.txt',
+  'exploit-ssrf.txt',
+];
 
 const providerRiskyPhrases = [
   'weaponize',
@@ -35,28 +48,41 @@ const providerRiskyPhrases = [
   'proof-based exploitation requirements',
   'task-based attack plan',
   'exploit endpoint',
+  'full exploitation',
 ];
 
-test('injection exploitation prompt uses provider-safe defensive validation language', async () => {
-  const prompt = await readFile(promptPath, 'utf8');
-  const lowerPrompt = prompt.toLowerCase();
+for (const promptFile of exploitPrompts) {
+  test(`${promptFile} keeps proof-based validation requirements inside the critical section`, async () => {
+    const prompt = await readFile(join(promptsDir, promptFile), 'utf8');
 
-  for (const phrase of providerRiskyPhrases) {
-    assert.equal(
-      lowerPrompt.includes(phrase),
-      false,
-      `prompt should not contain provider-risky phrase: ${phrase}`,
+    assert.match(
+      prompt,
+      /<critical>[\s\S]*### PROOF-BASED VALIDATION REQUIREMENTS[\s\S]*<\/critical>/,
+      `${promptFile} should put proof-based validation requirements inside <critical>`,
     );
-  }
+  });
 
-  assert.match(
-    prompt,
-    /If the queue is empty|If a queue item is a placeholder/i,
-    'prompt should instruct the agent to close empty or placeholder queues safely',
-  );
-  assert.match(
-    prompt,
-    /non-destructive/i,
-    'prompt should require non-destructive validation evidence',
-  );
-});
+  test(`${promptFile} uses provider-safe defensive validation language`, async () => {
+    const prompt = await readFile(join(promptsDir, promptFile), 'utf8');
+    const lowerPrompt = prompt.toLowerCase();
+
+    for (const phrase of providerRiskyPhrases) {
+      assert.equal(
+        lowerPrompt.includes(phrase),
+        false,
+        `${promptFile} should not contain provider-risky phrase: ${phrase}`,
+      );
+    }
+
+    assert.match(
+      prompt,
+      /If the queue is empty|If a queue item is a placeholder/i,
+      `${promptFile} should instruct the agent to close empty or placeholder queues safely`,
+    );
+    assert.match(
+      prompt,
+      /non-destructive/i,
+      `${promptFile} should require non-destructive validation evidence`,
+    );
+  });
+}
