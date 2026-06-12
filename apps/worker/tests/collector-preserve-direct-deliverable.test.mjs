@@ -56,6 +56,22 @@ test('does not preserve direct deliverable when a batched collector tool was cal
   );
 });
 
+test('does not preserve direct deliverable when batched collector calls are not numeric', () => {
+  for (const calls of [null, false, '']) {
+    assert.equal(
+      shouldPreserveDirectDeliverableOnCollectorMiss(
+        {
+          set_executive_summary: 'skipped',
+          add_endpoints: { calls, endpoints_seen: 0 },
+          set_application_intelligence: 'skipped',
+        },
+        substantiveMarkdown(),
+      ),
+      false,
+    );
+  }
+});
+
 test('preserves substantive direct deliverable that naturally mentions missing controls', () => {
   const markdown = `# Pre-Recon Report\n\n## Findings\nThe upload endpoint rate limiting was not provided by the observed middleware chain, but session-cookie validation and Firebase rule coverage were both mapped with source file references.\n\n## Evidence\nThe report includes concrete route paths, authorization guards, and storage access-control notes from the application source, so it is substantive direct fallback content rather than a collector placeholder.`;
 

@@ -112,10 +112,10 @@ function isCollectorStatusSkipped(status: unknown): boolean {
   if (status === 'skipped') return true;
   if (!status || typeof status !== 'object') return false;
 
-  const callCount = 'calls' in status ? Number((status as { calls?: unknown }).calls) : NaN;
-  if (!Number.isFinite(callCount)) return false;
+  const callsValue = 'calls' in status ? (status as { calls?: unknown }).calls : undefined;
+  if (typeof callsValue !== 'number' || !Number.isFinite(callsValue)) return false;
 
-  return callCount === 0;
+  return callsValue === 0;
 }
 
 export function shouldPreserveDirectDeliverableOnCollectorMiss(
