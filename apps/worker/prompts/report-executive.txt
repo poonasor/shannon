@@ -60,7 +60,7 @@ MODIFY the existing file `.shannon/deliverables/comprehensive_security_assessmen
 - Assessment Date: {current date}
 - Scope: {{VULN_CLASSES_TESTED}}
 - Exploitation: {{EXPLOITATION}}
-- Validation Limitations: {summarize material limitations from run_capabilities.json; if none, state "None detected"}
+- Validation Limitations: {summarize material limitations from run_capabilities.json, including any class-specific provider safety blocks; if none, state "None detected"}
 
 ## Summary by Vulnerability Type
 
@@ -86,6 +86,7 @@ IMPORTANT: Do NOT reorder the existing per-class report sections. Maintain the e
 
 2. Create the Executive Summary content:
    - Executive Summary: Technical overview with actionable findings for engineering leaders
+   - If `run_capabilities.json` contains a class-specific provider safety block, state that class was not fully analyzed instead of describing it as clean
 
 3. Clean the per-class report sections in `.shannon/deliverables/comprehensive_security_assessment_report.md` by applying these rules:
    - KEEP these specific section headings:

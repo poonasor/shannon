@@ -276,6 +276,23 @@ export async function readRunCapabilitiesFromDeliverables(deliverablesPath: stri
   return readJson<RunCapabilities>(snapshotPath);
 }
 
+export async function appendRunCapabilityLimitation(deliverablesPath: string, limitation: string): Promise<void> {
+  const snapshotPath = path.join(deliverablesPath, SNAPSHOT_FILENAME);
+  const snapshot = await readRunCapabilitiesFromDeliverables(deliverablesPath);
+  if (!snapshot) {
+    return;
+  }
+
+  if (snapshot.limitations.includes(limitation)) {
+    return;
+  }
+
+  await atomicWrite(
+    snapshotPath,
+    `${JSON.stringify({ ...snapshot, limitations: [...snapshot.limitations, limitation] }, null, 2)}\n`,
+  );
+}
+
 export async function readRunCapabilities(
   repoPath: string,
   deliverablesSubdir: string | undefined,

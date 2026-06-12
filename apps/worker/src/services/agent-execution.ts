@@ -38,6 +38,7 @@ import type { ConfigLoaderService } from './config-loader.js';
 import { PentestError } from './error-handling.js';
 import { commitGitSuccess, createGitCheckpoint, getGitCommitHash, rollbackGitWorkspace } from './git-manager.js';
 import { loadPrompt } from './prompt-manager.js';
+import { appendRunCapabilityLimitation } from './run-capabilities.js';
 
 /**
  * Input for agent execution.
@@ -72,6 +73,17 @@ interface StructuredVulnOutput {
   vulnerabilities?: unknown[];
 }
 
+const PROVIDER_SAFETY_BLOCK_PATTERNS = [
+  'flagged for possible cybersecurity risk',
+  'trusted access for cyber',
+  'content was flagged',
+];
+
+export function isProviderSafetyBlockMessage(message: string | null | undefined): boolean {
+  const normalized = (message ?? '').toLowerCase();
+  return PROVIDER_SAFETY_BLOCK_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
 function renderStructuredVulnDeliverable(agentName: AgentName, structuredOutput: unknown): string {
   const output = structuredOutput as StructuredVulnOutput;
   const vulnerabilities = Array.isArray(output?.vulnerabilities) ? output.vulnerabilities : [];
@@ -97,6 +109,27 @@ function renderStructuredVulnDeliverable(agentName: AgentName, structuredOutput:
   }
 
   return lines.join('\n');
+}
+
+function renderProviderSafetyBlockedVulnDeliverable(agentName: AgentName, errorMessage: string): string {
+  const title = AGENTS[agentName].displayName;
+  return [
+    `# ${title} Analysis Blocked`,
+    '',
+    '## Analysis Limitation',
+    '',
+    'The configured provider blocked this vulnerability-analysis prompt before the agent could complete a class verdict.',
+    'Shannon wrote an empty exploitation queue so the workflow can continue, but this must be read as an analysis limitation, not evidence that the class is clean.',
+    '',
+    '## Blocker',
+    '',
+    errorMessage,
+    '',
+    '## Reporting Guidance',
+    '',
+    'Do not describe this class as fully tested. Report that source analysis for this vulnerability class was blocked by provider safety filtering and should be rerun with provider/tooling access that supports authorized defensive security analysis.',
+    '',
+  ].join('\n');
 }
 
 /**
@@ -212,6 +245,7 @@ export class AgentExecutionService {
       providerConfig,
       mcpServers,
     );
+    const queueFilename = getQueueFilename(agentName);
 
     // 6. Spending cap check - defense-in-depth
     if (result.success && (result.turns ?? 0) <= 2 && (result.cost || 0) === 0) {
@@ -232,6 +266,18 @@ export class AgentExecutionService {
 
     // 7. Handle execution failure
     if (!result.success) {
+      if (queueFilename && isProviderSafetyBlockMessage(result.error)) {
+        return this.completeVulnAgentWithProviderSafetyBlock(
+          agentName,
+          deliverablesPath,
+          auditSession,
+          logger,
+          attemptNumber,
+          result,
+          queueFilename,
+        );
+      }
+
       return this.failAgent(agentName, deliverablesPath, auditSession, logger, {
         attemptNumber,
         result,
@@ -245,7 +291,6 @@ export class AgentExecutionService {
     }
 
     // 8. Write structured output to disk (vuln agents only)
-    const queueFilename = getQueueFilename(agentName);
     if (result.structuredOutput !== undefined && queueFilename) {
       await fs.ensureDir(deliverablesPath);
       const queuePath = path.join(deliverablesPath, queueFilename);
@@ -283,6 +328,51 @@ export class AgentExecutionService {
     }
 
     // 10. Success - commit deliverables, then capture checkpoint hash
+    await commitGitSuccess(deliverablesPath, agentName, logger);
+    const commitHash = await getGitCommitHash(deliverablesPath);
+
+    const endResult: AgentEndResult = {
+      attemptNumber,
+      duration_ms: result.duration,
+      cost_usd: result.cost || 0,
+      success: true,
+      model: result.model,
+      ...(commitHash && { checkpoint: commitHash }),
+    };
+    await auditSession.endAgent(agentName, endResult);
+
+    return ok(endResult);
+  }
+
+  private async completeVulnAgentWithProviderSafetyBlock(
+    agentName: AgentName,
+    deliverablesPath: string,
+    auditSession: AuditSession,
+    logger: ActivityLogger,
+    attemptNumber: number,
+    result: PromptResult,
+    queueFilename: string,
+  ): Promise<Result<AgentEndResult, PentestError>> {
+    const errorMessage = result.error ?? 'Provider safety filter blocked this vulnerability-analysis prompt.';
+    logger.warn(`${agentName}: provider safety block degraded to analysis limitation`, { errorMessage });
+
+    await fs.ensureDir(deliverablesPath);
+    await fs.writeFile(
+      path.join(deliverablesPath, queueFilename),
+      JSON.stringify({ vulnerabilities: [] }, null, 2),
+      'utf8',
+    );
+    await fs.writeFile(
+      path.join(deliverablesPath, AGENTS[agentName].deliverableFilename),
+      renderProviderSafetyBlockedVulnDeliverable(agentName, errorMessage),
+      'utf8',
+    );
+
+    await appendRunCapabilityLimitation(
+      deliverablesPath,
+      `${agentName} analysis was blocked by provider safety filtering; no class verdict was produced.`,
+    );
+
     await commitGitSuccess(deliverablesPath, agentName, logger);
     const commitHash = await getGitCommitHash(deliverablesPath);
 

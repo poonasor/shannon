@@ -82,7 +82,7 @@ function renderVulnSummarySubsections(selected: readonly VulnClass[]): string {
   return classes
     .map((cls) => {
       const spec = VULN_SUMMARY_SPECS[cls];
-      return `**${spec.heading}:**\n{Check for "${spec.evidenceSection}" and "${spec.findingsSection}" sections. Include actually exploited, validation-blocked, and queue-derived identified vulnerabilities that have IDs matching \`### [TYPE]-VULN-[NUMBER]\`. Exclude theoretical vulnerabilities requiring internal network access. If no vulnerability IDs exist in either section, state: "No ${spec.noneFoundLabel} vulnerabilities were found."}`;
+      return `**${spec.heading}:**\n{Check for "${spec.evidenceSection}" and "${spec.findingsSection}" sections. Include actually exploited, validation-blocked, and queue-derived identified vulnerabilities that have IDs matching \`### [TYPE]-VULN-[NUMBER]\`. Exclude theoretical vulnerabilities requiring internal network access. If run_capabilities.json says this class's analysis was blocked, state that the class was not fully analyzed and name the blocker instead of saying none were found. If no vulnerability IDs exist and no class-specific blocker exists, state: "No ${spec.noneFoundLabel} vulnerabilities were found."}`;
     })
     .join('\n\n');
 }
@@ -370,6 +370,43 @@ function codexCompletionBlock(): string {
   ].join('\n');
 }
 
+function sanitizeXssPromptForCodex(template: string): string {
+  return template
+    .replace(
+      /Success criterion: Live confirmation of XSS execution for every vulnerability through browser\/terminal testing, documented with complete source-to-sink trace, encoding analysis, DOM sink context, mismatch explanation, and repeatable proof-of-concept payload\./g,
+      'Success criterion: source-grounded identification of context-mismatch risks, documented with source-to-sink trace, encoding analysis, DOM sink context, and inert context-control markers. Do not perform live browser execution in the analysis phase.',
+    )
+    .replace(/steal user session cookies and tokens/gi, 'access browser-held user data')
+    .replace(/steal session tokens/gi, 'access browser-held session material')
+    .replace(/Capture credentials via fake login forms/gi, 'Document credential-capture risk at a high level')
+    .replace(
+      /Deface the website or redirect users to malicious sites/gi,
+      'Document content-tampering or redirect risk at a high level',
+    )
+    .replace(/weaponizes your confirmed XSS vulnerabilities/gi, 'validates your source-identified client-side findings')
+    .replace(/execute an injected script/gi, 'gain script-context control')
+    .replace(/injected script/gi, 'script-context marker')
+    .replace(/crafted payload/gi, 'crafted inert marker')
+    .replace(/proof-of-concept payload/gi, 'inert context-control marker')
+    .replace(/non-malicious payload/gi, 'inert marker')
+    .replace(/testing DOM-based XSS and form submission vectors/gi, 'reviewing DOM and form-submission vectors')
+    .replace(
+      /stored XSS testing and client-side payload execution verification/gi,
+      'stored-vector review and client-side context verification',
+    )
+    .replace(/'><script>alert\(1\)<\/script>'/g, "'INERT-CONTEXT-MARKER'")
+    .replace(/><script>alert\(1\)<\/script>/g, 'INERT-CONTEXT-MARKER')
+    .replace(/onmouseover=alert\(1\)/g, 'inert-attribute-marker')
+    .replace(/" onmouseover=alert\(1\) "/g, '" inert-attribute-marker "')
+    .replace(/<input id=config>/g, 'an inert duplicate-id marker')
+    .replace(/<noscript><p title="<\/noscript><img src=x onerror=alert\(1\)>">/g, 'a malformed inert markup marker')
+    .replace(/{{ 7\*7 }}/g, '{{ inert_arithmetic_marker }}')
+    .replace(
+      /"witness_payload": "A minimal, non-malicious marker that proves context control \(e\.g\., 'INERT-CONTEXT-MARKER', '" inert-attribute-marker '\)\."/g,
+      '"witness_payload": "A minimal inert marker string that proves context control without executable browser script, event handlers, credential capture, or destructive actions."',
+    );
+}
+
 export function adaptPromptForCodex(template: string): string {
   let result = replaceTagBlock(template, 'cli_tools', codexCliToolsBlock());
   result = replaceTagBlock(result, 'mcp_tools', codexArtifactOutputBlock());
@@ -412,6 +449,10 @@ export function adaptPromptForCodex(template: string): string {
       /there is no Markdown for you to write yourself\./g,
       'write markdown directly when no collector is available.',
     );
+
+  if (/Cross-Site Scripting|\bXSS\b/i.test(result)) {
+    result = sanitizeXssPromptForCodex(result);
+  }
 
   return result;
 }
