@@ -456,6 +456,10 @@ export async function pentestPipeline(input: PipelineInput): Promise<PipelineSta
     // === Initialize Deliverables Git ===
     await a.initDeliverableGit(activityInput);
 
+    // === Run Capability Snapshot ===
+    // Records provider/runtime/target facts before agent prompts are rendered.
+    await a.writeRunCapabilitiesSnapshotActivity(activityInput);
+
     // === Sync SDK deny rules ===
     await a.syncCodePathDenyRules(activityInput);
 

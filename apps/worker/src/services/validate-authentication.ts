@@ -105,6 +105,8 @@ export async function validateAuthentication(input: ValidateAuthInput): Promise<
     pipelineTestingMode ?? false,
     logger,
     promptDir,
+    providerConfig,
+    deliverablesSubdir,
   );
 
   await auditSession.startAgent(AGENT_NAME, prompt, attemptNumber);

@@ -13,8 +13,9 @@ The orchestrator has already concatenated all per-class deliverables into `compr
 Your task is to:
 1. Read this existing concatenated report
 2. Add an Executive Summary (vulnerability overview) at the top
-3. Clean up ALL per-class report sections by removing extraneous content
-4. Save the modified version back to the same file
+3. Reflect run capability limitations from `run_capabilities.json` when present
+4. Clean up ALL per-class report sections by removing extraneous content
+5. Save the modified version back to the same file
 
 IMPORTANT: You are MODIFYING an existing file, not creating a new one.
 </objective>
@@ -43,6 +44,7 @@ Exploitation: {{EXPLOITATION}}
 You will analyze the following deliverable files:
 - `.shannon/deliverables/pre_recon_deliverable.md` - Initial reconnaissance and technology stack
 - `.shannon/deliverables/recon_deliverable.md` - Attack surface mapping and endpoint discovery
+- `.shannon/deliverables/run_capabilities.json` - Provider/runtime/target capability facts and validation limitations
 - `.shannon/deliverables/comprehensive_security_assessment_report.md` - The already-concatenated report that you will modify
 </input_files>
 
@@ -58,6 +60,7 @@ MODIFY the existing file `.shannon/deliverables/comprehensive_security_assessmen
 - Assessment Date: {current date}
 - Scope: {{VULN_CLASSES_TESTED}}
 - Exploitation: {{EXPLOITATION}}
+- Validation Limitations: {summarize material limitations from run_capabilities.json; if none, state "None detected"}
 
 ## Summary by Vulnerability Type
 
@@ -88,10 +91,13 @@ IMPORTANT: Do NOT reorder the existing per-class report sections. Maintain the e
    - KEEP these specific section headings:
      NOTE: these sections will contain vulnerability lists with IDs matching pattern `### [TYPE]-VULN-[NUMBER]`
      * `# [Type] {{REPORT_VULN_HEADING}}`
+     * `# [Type] Findings`
      * `## {{REPORT_VULN_SUBHEADING}}`
+     * `## Successfully Exploited Vulnerabilities`
+     * `## Identified Vulnerabilities`
+     * `## Potential Vulnerabilities (Validation Blocked)` when it contains vulnerability IDs
 {{REPORT_FILTER_RULES}}
    - REMOVE ANY OTHER SECTIONS (even if they contain vulnerability IDs), such as:
-     * `## Potential Vulnerabilities (Validation Blocked)` (All agents)
      * Standalone "Recommendations" sections
      * "Conclusion" sections
      * "Summary" sections
@@ -110,4 +116,3 @@ IMPORTANT: Do NOT reorder the existing per-class report sections. Maintain the e
 
 CRITICAL: You are modifying the existing concatenated report at `.shannon/deliverables/comprehensive_security_assessment_report.md` IN-PLACE, not creating a separate file.
 </instructions>
-

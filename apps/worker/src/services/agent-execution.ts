@@ -156,11 +156,12 @@ export class AgentExecutionService {
     try {
       prompt = await loadPrompt(
         promptTemplate,
-        { webUrl, repoPath, AUTH_STATE_FILE: authStateFile(auditSession.sessionMetadata) },
+        { webUrl, repoPath, AUTH_STATE_FILE: authStateFile(auditSession.sessionMetadata), deliverablesPath },
         distributedConfig,
         pipelineTestingMode,
         logger,
         promptDir,
+        providerConfig,
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

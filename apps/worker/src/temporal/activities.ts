@@ -35,6 +35,7 @@ import { executeGitCommandWithRetry } from '../services/git-manager.js';
 import { runPreflightChecks } from '../services/preflight.js';
 import type { ExploitationDecision, VulnType } from '../services/queue-validation.js';
 import { assembleFinalReport, injectModelIntoReport } from '../services/reporting.js';
+import { writeRunCapabilitiesSnapshot } from '../services/run-capabilities.js';
 import { validateAuthentication } from '../services/validate-authentication.js';
 import { AGENTS } from '../session-manager.js';
 import type { AgentName } from '../types/agents.js';
@@ -399,9 +400,15 @@ async function runVulnAgentWithCollector(
   const callStatus = collector.getCallStatus();
   logger.info(`${vulnClass} vuln tool call status`, { callStatus });
 
+  const mdPath = path.join(dir, `${vulnClass}_analysis_deliverable.md`);
+  const existingMarkdown = await readExistingMarkdown(mdPath);
+  if (shouldPreserveDirectDeliverableOnCollectorMiss(callStatus, existingMarkdown)) {
+    logger.warn(`Preserving direct ${vulnClass}_analysis_deliverable.md because no collector tools were called`);
+    return metrics;
+  }
+
   const collected = collector.getAll();
   const markdown = renderVulnDeliverable(vulnClass, collected);
-  const mdPath = path.join(dir, `${vulnClass}_analysis_deliverable.md`);
   await atomicWrite(mdPath, markdown);
   logger.info(`Wrote ${vulnClass}_analysis_deliverable.md from structured data (${markdown.length} bytes)`);
 
@@ -475,6 +482,14 @@ async function runExploitAgentWithCollector(
 
   const logger = createActivityLogger();
   const collected = collector.getAll();
+  const mdPath = path.join(dir, `${vulnClass}_exploitation_evidence.md`);
+  const existingMarkdown = await readExistingMarkdown(mdPath);
+  const callStatus = { add_exploit: { calls: collected.length } };
+  if (shouldPreserveDirectDeliverableOnCollectorMiss(callStatus, existingMarkdown)) {
+    logger.warn(`Preserving direct ${vulnClass}_exploitation_evidence.md because no collector tools were called`);
+    return metrics;
+  }
+
   const emittedIds = new Set(collected.map((e) => e.vulnerability_id));
   const missingIds = [...validIds].filter((id) => !emittedIds.has(id));
   const exploitedCount = collected.filter((e) => e.status === 'exploited').length;
@@ -488,7 +503,6 @@ async function runExploitAgentWithCollector(
   });
 
   const markdown = renderExploitDeliverable(vulnClass, collected, idToType);
-  const mdPath = path.join(dir, `${vulnClass}_exploitation_evidence.md`);
   await atomicWrite(mdPath, markdown);
   logger.info(`Wrote ${vulnClass}_exploitation_evidence.md from structured data (${markdown.length} bytes)`);
 
@@ -517,6 +531,17 @@ export async function runAuthzExploitAgent(input: ActivityInput): Promise<AgentM
 
 export async function runReportAgent(input: ActivityInput): Promise<AgentMetrics> {
   return runAgentActivity('report', input);
+}
+
+export async function writeRunCapabilitiesSnapshotActivity(input: ActivityInput): Promise<void> {
+  const logger = createActivityLogger();
+  await writeRunCapabilitiesSnapshot(
+    input.repoPath,
+    input.deliverablesSubdir,
+    input.webUrl,
+    input.providerConfig,
+    logger,
+  );
 }
 
 /**
@@ -766,14 +791,16 @@ export async function assembleReportActivity(input: ActivityInput, exploit: bool
   const { repoPath, deliverablesSubdir } = input;
   const logger = createActivityLogger();
 
-  if (!exploit) {
-    logger.info('Rendering per-class findings from analysis queues...');
-    try {
-      await renderFindingsFromQueues(repoPath, deliverablesSubdir, logger);
-    } catch (error) {
-      const err = error as Error;
-      logger.warn(`Error rendering findings from queues: ${err.message}`);
-    }
+  logger.info(
+    exploit
+      ? 'Rendering per-class findings from analysis queues for exploit residual fallback...'
+      : 'Rendering per-class findings from analysis queues...',
+  );
+  try {
+    await renderFindingsFromQueues(repoPath, deliverablesSubdir, logger);
+  } catch (error) {
+    const err = error as Error;
+    logger.warn(`Error rendering findings from queues: ${err.message}`);
   }
 
   logger.info('Assembling deliverables from specialist agents...');

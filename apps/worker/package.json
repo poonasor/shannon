@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
+    "test": "pnpm run build && find dist -name '*.test.js' -print0 | xargs -0 node --test",
     "clean": "rm -rf dist"
   },
   "dependencies": {

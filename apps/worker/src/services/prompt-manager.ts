@@ -5,12 +5,26 @@
 // as published by the Free Software Foundation.
 
 import { fs, path } from 'zx';
+import { describeProvider, isCodexProvider } from '../ai/provider.js';
 import { PROMPTS_DIR } from '../paths.js';
 import { PLAYWRIGHT_SESSION_MAPPING } from '../session-manager.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
-import type { Authentication, DistributedConfig, ReportConfig, Rule, VulnClass } from '../types/config.js';
+import type {
+  Authentication,
+  DistributedConfig,
+  ProviderConfig,
+  ReportConfig,
+  Rule,
+  VulnClass,
+} from '../types/config.js';
 import { isGlobPattern } from '../utils/glob.js';
 import { handlePromptError, PentestError } from './error-handling.js';
+import {
+  type RunCapabilities,
+  readRunCapabilities,
+  readRunCapabilitiesFromDeliverables,
+  renderRunCapabilitiesForPrompt,
+} from './run-capabilities.js';
 
 function renderCodePathRules(rules: Rule[]): string {
   const filtered = rules.filter((r) => r.type === 'code_path');
@@ -26,6 +40,7 @@ function renderCodePathRules(rules: Rule[]): string {
 interface VulnSummarySpec {
   readonly heading: string;
   readonly evidenceSection: string;
+  readonly findingsSection: string;
   readonly noneFoundLabel: string;
 }
 
@@ -33,26 +48,31 @@ const VULN_SUMMARY_SPECS: Record<VulnClass, VulnSummarySpec> = {
   auth: {
     heading: 'Authentication Vulnerabilities',
     evidenceSection: 'Authentication Exploitation Evidence',
+    findingsSection: 'Authentication Findings',
     noneFoundLabel: 'authentication',
   },
   authz: {
     heading: 'Authorization Vulnerabilities',
     evidenceSection: 'Authorization Exploitation Evidence',
+    findingsSection: 'Authorization Findings',
     noneFoundLabel: 'authorization',
   },
   xss: {
     heading: 'Cross-Site Scripting (XSS) Vulnerabilities',
     evidenceSection: 'XSS Exploitation Evidence',
+    findingsSection: 'XSS Findings',
     noneFoundLabel: 'XSS',
   },
   injection: {
     heading: 'SQL/Command Injection Vulnerabilities',
     evidenceSection: 'Injection Exploitation Evidence',
+    findingsSection: 'Injection Findings',
     noneFoundLabel: 'SQL or command injection',
   },
   ssrf: {
     heading: 'Server-Side Request Forgery (SSRF) Vulnerabilities',
     evidenceSection: 'SSRF Exploitation Evidence',
+    findingsSection: 'SSRF Findings',
     noneFoundLabel: 'SSRF',
   },
 };
@@ -62,7 +82,7 @@ function renderVulnSummarySubsections(selected: readonly VulnClass[]): string {
   return classes
     .map((cls) => {
       const spec = VULN_SUMMARY_SPECS[cls];
-      return `**${spec.heading}:**\n{Check for "${spec.evidenceSection}" section. Include actually exploited vulnerabilities and those blocked by security controls. Exclude theoretical vulnerabilities requiring internal network access. If vulnerabilities exist, summarize their impact and severity. If section is missing or empty, state: "No ${spec.noneFoundLabel} vulnerabilities were found."}`;
+      return `**${spec.heading}:**\n{Check for "${spec.evidenceSection}" and "${spec.findingsSection}" sections. Include actually exploited, validation-blocked, and queue-derived identified vulnerabilities that have IDs matching \`### [TYPE]-VULN-[NUMBER]\`. Exclude theoretical vulnerabilities requiring internal network access. If no vulnerability IDs exist in either section, state: "No ${spec.noneFoundLabel} vulnerabilities were found."}`;
     })
     .join('\n\n');
 }
@@ -120,6 +140,7 @@ interface PromptVariables {
   repoPath: string;
   AUTH_STATE_FILE: string;
   PLAYWRIGHT_SESSION?: string;
+  deliverablesPath?: string;
 }
 
 interface IncludeReplacement {
@@ -266,6 +287,135 @@ function buildAuthContext(config: DistributedConfig | null): string {
   return lines.join('\n');
 }
 
+function replaceTagBlock(content: string, tagName: string, replacement: string): string {
+  const pattern = new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'g');
+  return content.replace(pattern, replacement);
+}
+
+async function buildProviderToolingContext(
+  variables: PromptVariables,
+  providerConfig: ProviderConfig | undefined,
+  deliverablesSubdir: string | undefined,
+): Promise<string> {
+  let snapshot: RunCapabilities | null = null;
+  try {
+    snapshot = variables.deliverablesPath
+      ? await readRunCapabilitiesFromDeliverables(variables.deliverablesPath)
+      : await readRunCapabilities(variables.repoPath, deliverablesSubdir);
+  } catch {
+    snapshot = null;
+  }
+
+  const lines = ['<provider_tooling_context>', `Provider: ${describeProvider(providerConfig)}`, ''];
+  lines.push(renderRunCapabilitiesForPrompt(snapshot));
+  lines.push('');
+
+  if (isCodexProvider(providerConfig)) {
+    lines.push(
+      'Codex execution contract:',
+      '- Use the shell/search/read/edit tools that are actually available in this Codex session.',
+      '- Do not wait for Claude-only collector, delegation, or planning tools.',
+      '- Vulnerability agents must rely on final structured output for the exploitation queue.',
+      '- When collector tools are unavailable, direct markdown deliverables are valid fallback artifacts.',
+      '- Missing browser, network, dependency, or env capability is a validation limitation, not evidence that no vulnerability exists.',
+    );
+  } else {
+    lines.push(
+      'Claude execution contract:',
+      '- Use the MCP collectors, Task Agent, TodoWrite, and playwright-cli instructions embedded in this prompt.',
+      '- Collector tool output is the authoritative source for rendered markdown deliverables.',
+    );
+  }
+
+  lines.push('</provider_tooling_context>');
+  return lines.join('\n');
+}
+
+function codexCliToolsBlock(): string {
+  return [
+    '<cli_tools>',
+    '**Codex Tool Usage Guidance:**',
+    '- Use available shell, search, read, and edit tools directly for code analysis.',
+    '- Maintain a concise internal checklist in your response process; do not require TodoWrite.',
+    '- Use browser automation only if it is available in this runtime. If it is unavailable, record validation as blocked.',
+    '- Use short, bounded scripts only when they reduce ambiguity and stay within the assessment scope.',
+    '</cli_tools>',
+  ].join('\n');
+}
+
+function codexArtifactOutputBlock(): string {
+  return [
+    '<codex_artifact_output>',
+    '**Codex Artifact Contract:**',
+    '- Claude in-process collector tools are unavailable in this execution path.',
+    '- For vulnerability-analysis agents, the final structured JSON output is the authoritative exploitation queue.',
+    '- If no collector is available and markdown is required, write the markdown deliverable directly under `.shannon/deliverables/`.',
+    '- For exploitation agents, record confirmed or validation-blocked findings in direct markdown when collector emission is unavailable.',
+    '- Do not downgrade queued findings to "none found" because live validation, browser automation, dependencies, or env files are unavailable.',
+    '</codex_artifact_output>',
+  ].join('\n');
+}
+
+function codexCompletionBlock(): string {
+  return [
+    '<conclusion_trigger>',
+    '**Codex Completion Requirements:**',
+    '1. Complete the requested source analysis or validation using available tools.',
+    '2. Produce the required structured output when a schema is provided.',
+    '3. Write any required direct markdown artifact when collector tools are unavailable.',
+    '4. Explicitly record missing browser, network, dependency, or env capability as validation limitations.',
+    '',
+    'After these requirements are satisfied, announce the phase completion phrase from this prompt and stop.',
+    '</conclusion_trigger>',
+  ].join('\n');
+}
+
+export function adaptPromptForCodex(template: string): string {
+  let result = replaceTagBlock(template, 'cli_tools', codexCliToolsBlock());
+  result = replaceTagBlock(result, 'mcp_tools', codexArtifactOutputBlock());
+  result = replaceTagBlock(result, 'conclusion_trigger', codexCompletionBlock());
+  result = replaceTagBlock(
+    result,
+    'task_agent_strategy',
+    [
+      '<direct_code_analysis_strategy>',
+      '**Direct Code Analysis Strategy:**',
+      '- Use search, file reads, and bounded shell commands to map architecture, entry points, and security controls.',
+      '- Split the work into discovery, targeted tracing, and synthesis phases.',
+      '- Record uncertainty and blocked validation explicitly instead of treating it as absence of findings.',
+      '</direct_code_analysis_strategy>',
+    ].join('\n'),
+  );
+
+  result = result
+    .replace(
+      /- \*\*MANDATORY:\*\* You MUST emit your complete analysis by calling all seven `set_\*` MCP tools listed in `<mcp_tools>` before terminating\. The host renders the deliverable Markdown from those calls\./g,
+      '- **MANDATORY:** You MUST emit your complete analysis through the Codex artifact contract above.',
+    )
+    .replace(/Task Agents?/g, 'available code/search tools')
+    .replace(/task agents?/g, 'available code/search tools')
+    .replace(/Task Agent/g, 'available code/search tools')
+    .replace(/TodoWrite Tool/g, 'internal checklist')
+    .replace(/TodoWrite tool/g, 'internal checklist')
+    .replace(/TodoWrite/g, 'internal checklist')
+    .replace(/playwright-cli skill/g, 'available browser automation, if present')
+    .replace(/MCP tools/g, 'Codex artifact/output contract')
+    .replace(/MCP tool/g, 'Codex artifact/output contract')
+    .replace(/MCP SDK/g, 'Collector SDK')
+    .replace(/MCP Emission/g, 'Codex artifact emission')
+    .replace(/`<mcp_tools>`/g, '`<codex_artifact_output>`')
+    .replace(
+      /You do NOT write the Markdown file directly\./g,
+      'Write markdown directly when no collector is available.',
+    )
+    .replace(
+      /there is no Markdown for you to write yourself\./g,
+      'write markdown directly when no collector is available.',
+    );
+
+  return result;
+}
+
 // Pure function: Variable interpolation
 async function interpolateVariables(
   template: string,
@@ -273,6 +423,8 @@ async function interpolateVariables(
   config: DistributedConfig | null = null,
   logger: ActivityLogger,
   promptsBaseDir: string = PROMPTS_DIR,
+  providerConfig?: ProviderConfig,
+  deliverablesSubdir?: string,
 ): Promise<string> {
   try {
     if (!template || typeof template !== 'string') {
@@ -288,12 +440,24 @@ async function interpolateVariables(
       });
     }
 
+    const providerToolingContext = await buildProviderToolingContext(variables, providerConfig, deliverablesSubdir);
+    const hasProviderToolingPlaceholder = template.includes('{{PROVIDER_TOOLING_CONTEXT}}');
+
     let result = template
       .replace(/{{WEB_URL}}/g, variables.webUrl)
       .replace(/{{REPO_PATH}}/g, variables.repoPath)
+      .replace(/{{PROVIDER_TOOLING_CONTEXT}}/g, providerToolingContext)
       .replace(/{{PLAYWRIGHT_SESSION}}/g, variables.PLAYWRIGHT_SESSION || 'agent1')
       .replace(/{{AUTH_CONTEXT}}/g, buildAuthContext(config))
       .replace(/{{DESCRIPTION}}/g, config?.description ? `Description: ${config.description}` : '');
+
+    if (isCodexProvider(providerConfig)) {
+      result = adaptPromptForCodex(result);
+    }
+
+    if (!hasProviderToolingPlaceholder) {
+      result = `${providerToolingContext}\n\n${result}`;
+    }
 
     const avoidUrlRules = config?.avoid?.filter((r) => r.type !== 'code_path') ?? [];
     const focusUrlRules = config?.focus?.filter((r) => r.type !== 'code_path') ?? [];
@@ -390,6 +554,8 @@ export async function loadPrompt(
   pipelineTestingMode: boolean = false,
   logger: ActivityLogger,
   promptDir?: string,
+  providerConfig?: ProviderConfig,
+  deliverablesSubdir?: string,
 ): Promise<string> {
   try {
     const basePromptsDir = resolvePromptDir(promptDir);
@@ -423,7 +589,15 @@ export async function loadPrompt(
     template = await processIncludes(template, promptsDir);
 
     // 5. Interpolate variables and return final prompt
-    return await interpolateVariables(template, enhancedVariables, config, logger, basePromptsDir);
+    return await interpolateVariables(
+      template,
+      enhancedVariables,
+      config,
+      logger,
+      basePromptsDir,
+      providerConfig,
+      deliverablesSubdir,
+    );
   } catch (error) {
     if (error instanceof PentestError) {
       throw error;

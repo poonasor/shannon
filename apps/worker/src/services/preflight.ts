@@ -16,7 +16,9 @@
  * 2. Config file parses and validates (if provided)
  * 3. code_path rules match real entries in the repo (filesystem only)
  * 4. Credentials validate via the configured provider (Claude SDK or Codex CLI)
- * 5. Target URL resolves, is not link-local (cloud metadata), and is reachable (DNS + HTTP)
+ * 5. Target URL is syntactically valid and not link-local. Network reachability
+ *    failures are recorded later as capability limitations so source-only scans
+ *    can still proceed.
  */
 
 import { spawn } from 'node:child_process';
@@ -711,7 +713,8 @@ async function validateTargetUrl(targetUrl: string, logger: ActivityLogger): Pro
  * 2. Config file parses and validates (if configPath provided)
  * 3. code_path rules match at least one entry in the repo (skipped without config)
  * 4. Credentials validate (API key, OAuth, Bedrock, or Vertex AI)
- * 5. Target URL is reachable from the container
+ * 5. Target URL is valid and safe to scan; network reachability failures warn
+ *    but do not block source-only analysis
  *
  * Returns on first failure.
  */
@@ -755,9 +758,13 @@ export async function runPreflightChecks(
     return credResult;
   }
 
-  // 5. Target URL reachability check (cheap — 1 HTTP round-trip)
+  // 5. Target URL safety/reachability check (cheap — 1 HTTP round-trip)
   const urlResult = await validateTargetUrl(targetUrl, logger);
   if (!urlResult.ok) {
+    if (urlResult.error.type === 'network' && urlResult.error.code === ErrorCode.TARGET_UNREACHABLE) {
+      logger.warn(`${urlResult.error.message} Continuing with source-only analysis where possible.`);
+      return ok(undefined);
+    }
     return urlResult;
   }
 
